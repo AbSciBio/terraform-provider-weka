@@ -1,0 +1,48 @@
+# terraform-weka
+
+Terraform provider for configuration inside a running Weka cluster (filesystems, quotas, snapshot policies, S3, users). The Weka operator owns cluster layout; do not add resources for containers, drives, hosts, failure domains, KMS, or turning protocol services on.
+
+This repo will be published. No cluster names, endpoints, credentials, or internal hostnames in code, tests, examples, or docs.
+
+## Commands
+
+```bash
+go generate ./...                 # regenerate the API client and docs/
+go vet ./... && go test -race ./...
+```
+
+Commit the output of `go generate`. CI fails if it is stale.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `api/weka-4.4.json` | Pinned Weka 4.4 OpenAPI spec. Never edit; fix generation problems in `internal/wekaapi/overlay.yaml`. |
+| `internal/wekaapi/client.gen.go` | Generated. Never edit. Tags included are listed in `oapi-codegen.yaml`. |
+| `internal/wekaapi/wrapper.go` | `API` (login and re-login), `Check`, `IsNotFound`, `Poll`. |
+| `internal/provider/filesystem_group_resource.go` | Reference resource. Copy it. |
+| `internal/provider/fake_weka_test.go` | Fake API for unit tests. |
+| `examples/` | Feeds `docs/` through `tfplugindocs`. |
+
+## Adding a resource
+
+Copy `filesystem_group_resource.go` and its test. Each resource:
+
+- Lives in `internal/provider/<name>_resource.go` with `<name>_resource_test.go`, and gets one line in `Resources()` in `provider.go`.
+- Calls `wekaapi.Check(resp.StatusCode(), resp.Body)` after every generated call.
+- On Read, a 404 (`wekaapi.IsNotFound`) means `resp.State.RemoveResource`. On Delete, a 404 is success.
+- Implements import by UID **and** by name: list, then match either. Existing clusters are adopted by name.
+- Uses `Optional + Computed + UseStateForUnknown` for anything the server defaults.
+- Uses `wekaapi.Poll` when the API returns before the change has finished, and fails rather than guessing if it never settles.
+- Has a unit test against `newFakeWeka`: create, update, import, and a deletion done outside Terraform. Register the fake's handlers in the test file; do not grow `fake_weka_test.go` per resource.
+- Has `examples/resources/weka_<name>/resource.tf` and `import.sh`.
+
+Cross-resource references are plain UID strings. Do not reach into another resource's code.
+
+## Spec quirks found so far
+
+- `/fileSystems/{inode_id}/getPath` and `/resolve` share an `operationId`; the overlay renames the first.
+- Login `data` is an object in the spec and an array in the docs example. `parseTokens` accepts both.
+- Second counts (`target_ssd_retention`, `start_demote`, ...) are `float32` in the spec. Expose them as `Int64`.
+- `resolvePath` types `inode_id` as a string but shows a number. Check the wire format before relying on it.
+- Not yet checked against a real cluster: create responses carrying `uid`, and 404 (rather than 400) for an unknown UID.

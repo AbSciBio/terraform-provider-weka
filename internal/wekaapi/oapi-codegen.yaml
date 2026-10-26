@@ -1,0 +1,23 @@
+package: wekaapi
+output: client.gen.go
+generate:
+  client: true
+  models: true
+output-options:
+  overlay:
+    path: overlay.yaml
+  include-tags:
+    - Login
+    - Filesystem
+    - Filesystem group
+    - Quota
+    - Snapshot Policy
+    - Object store
+    - Object store bucket
+    - S3
+    - NFS
+    - SMB
+    - Organization
+    - User
+    - LDAP
+    - Lockout policy
