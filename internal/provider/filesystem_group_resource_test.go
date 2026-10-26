@@ -81,6 +81,19 @@ func fakeFileSystemGroups(t *testing.T, f *fakeWeka) *sync.Map {
 	return &store
 }
 
+func TestExactSecondsValue(t *testing.T) {
+	for _, n := range []int64{0, 86400, 31104000, 93312000} {
+		if !exactSecondsValue(n) {
+			t.Errorf("%d should be exact", n)
+		}
+	}
+	for _, n := range []int64{-1, 16777217, 1<<63 - 1} {
+		if exactSecondsValue(n) {
+			t.Errorf("%d should be rejected", n)
+		}
+	}
+}
+
 func TestFileSystemGroupResource(t *testing.T) {
 	f := newFakeWeka(t)
 	store := fakeFileSystemGroups(t, f)
@@ -153,7 +166,20 @@ resource "weka_filesystem_group" "test" {
   target_ssd_retention = 16777217
   start_demote         = 900
 }`),
-				ExpectError: regexp.MustCompile(`(?s)Attribute target_ssd_retention.*between 0 and 16777216`),
+				ExpectError: regexp.MustCompile(`16777217 cannot be stored exactly as a float32`),
+			},
+			{
+				// 1080 and 360 days: past 2^24, and the values a live cluster uses.
+				Config: f.config(`
+resource "weka_filesystem_group" "test" {
+  name                 = "tier2"
+  target_ssd_retention = 93312000
+  start_demote         = 31104000
+}`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("weka_filesystem_group.test", "target_ssd_retention", "93312000"),
+					resource.TestCheckResourceAttr("weka_filesystem_group.test", "start_demote", "31104000"),
+				),
 			},
 			{
 				// Deleted outside Terraform: Read drops it and the plan recreates it.

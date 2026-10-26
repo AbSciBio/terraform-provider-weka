@@ -49,7 +49,7 @@ Cross-resource references are plain UID strings. Do not reach into another resou
 
 - `/fileSystems/{inode_id}/getPath` and `/resolve` share an `operationId`; the overlay renames the first.
 - Login `data` is an object in the spec and an array in the docs example. `parseTokens` accepts both.
-- Second counts (`target_ssd_retention`, `start_demote`, ...) are `float32` in the spec, exact only up to `2^24` (about 194 days). Expose them as `Int64` with `int64validator.Between(0, 1<<24)`, so an out-of-range value is a plan-time error instead of a silently rounded one.
+- Second counts (`target_ssd_retention`, `start_demote`) are `float32` on the wire. Every integer is exact through `2^24` (about 194 days); above that only some are. Use `exactSeconds()`, which rejects a value `float32` would change (16777217 becomes 16777216). Whole days stay exact well past that: 360 days (`31104000`) and 1080 days (`93312000`) are valid. Keep `int64validator.Between(0, maxExactSeconds)` for counts where every integer matters and real values are small (quotas, UIDs, failed-login limits).
 - `updateFileSystemGroup` and `deleteFileSystemGroup` document only `400`/`401` in the spec — no `404`, unlike `getFileSystemGroup`. Confirm the real 404 behavior on PUT/DELETE before relying on `wekaapi.IsNotFound` there for another resource.
 - `resolvePath` types `inode_id` as a string but shows a number. Check the wire format before relying on it.
 - A filesystem group with only one of `target_ssd_retention` / `start_demote` is rejected (`HTTP 400: must specify both demotion and retention time`). Omit both, or set both. When both are set, `start_demote` must be at most `target_ssd_retention / 3`. `ValidateConfig` enforces both.

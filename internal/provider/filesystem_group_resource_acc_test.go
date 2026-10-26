@@ -74,6 +74,15 @@ func TestAccFileSystemGroup(t *testing.T) {
 				),
 			},
 			{
+				// 1080 and 360 days, the values a live cluster uses. Past 2^24, still exact as float32.
+				Config: accConfig(renamed, "target_ssd_retention = 93312000\n  start_demote = 31104000"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					accMustBeOurs(renamed),
+					resource.TestCheckResourceAttr("weka_filesystem_group.test", "target_ssd_retention", "93312000"),
+					resource.TestCheckResourceAttr("weka_filesystem_group.test", "start_demote", "31104000"),
+				),
+			},
+			{
 				ResourceName:      "weka_filesystem_group.test",
 				ImportState:       true,
 				ImportStateId:     renamed,

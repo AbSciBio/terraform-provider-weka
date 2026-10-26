@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -64,14 +63,14 @@ func (r *fileSystemGroupResource) Schema(_ context.Context, _ resource.SchemaReq
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
-				Validators:    []validator.Int64{int64validator.Between(0, maxExactSeconds)},
+				Validators:    []validator.Int64{exactSeconds()},
 			},
 			"start_demote": schema.Int64Attribute{
 				Description:   "Seconds after a write before data is copied to the object store. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.",
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
-				Validators:    []validator.Int64{int64validator.Between(0, maxExactSeconds)},
+				Validators:    []validator.Int64{exactSeconds()},
 			},
 		},
 	}
@@ -245,10 +244,51 @@ func fileSystemGroupFromAPI(g wekaapi.FileSystemGroup) fileSystemGroupModel {
 	}
 }
 
-// The spec types these second counts as float32, which loses precision above
-// 2^24 (about 194 days): 16777217 round-trips as 16777216. The schema
-// validators reject anything past that so a value is never silently altered.
+// maxExactSeconds is the last integer at which every whole number survives a
+// float32 round trip. Counts that must stay exact byte-for-byte (quotas, UIDs,
+// failed-login limits) stay capped here. Day-scale durations use exactSeconds
+// instead: 360 and 1080 days are past this and still exact.
 const maxExactSeconds = 1 << 24
+
+// exactSeconds accepts a non-negative integer the API's float32 can store
+// unchanged. 16777217 is rejected (it would be saved as 16777216). Whole days
+// stay exact well past that, including 31104000 (360 days) and 93312000 (1080 days).
+func exactSeconds() validator.Int64 { return exactSecondsValidator{} }
+
+type exactSecondsValidator struct{}
+
+func (exactSecondsValidator) Description(context.Context) string {
+	return "must be a non-negative integer that float32 stores exactly"
+}
+
+func (exactSecondsValidator) MarkdownDescription(ctx context.Context) string {
+	return exactSecondsValidator{}.Description(ctx)
+}
+
+func (exactSecondsValidator) ValidateInt64(_ context.Context, req validator.Int64Request, resp *validator.Int64Response) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	v := req.ConfigValue.ValueInt64()
+	if exactSecondsValue(v) {
+		return
+	}
+	resp.Diagnostics.AddAttributeError(req.Path, "Inexact second count",
+		fmt.Sprintf("%d cannot be stored exactly as a float32, so the API would save a different value.", v))
+}
+
+func exactSecondsValue(n int64) bool {
+	if n < 0 {
+		return false
+	}
+	f := float32(n)
+	// float32(MaxInt64) rounds to 2^63. Converting that back to int64 saturates
+	// at MaxInt64, which would look like a clean round trip.
+	if float64(f) >= float64(uint64(1)<<63) {
+		return false
+	}
+	return int64(f) == n
+}
 
 func secondsPtr(v types.Int64) *float32 {
 	if v.IsNull() || v.IsUnknown() {
