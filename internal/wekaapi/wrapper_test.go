@@ -54,6 +54,7 @@ func TestLoginOnceAndReuseToken(t *testing.T) {
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		})
 		srv := httptest.NewServer(mux)
+		t.Cleanup(srv.Close)
 		api := newAPI(t, srv, "p")
 
 		for range 3 {
@@ -68,7 +69,6 @@ func TestLoginOnceAndReuseToken(t *testing.T) {
 		if got := logins.Load(); got != 1 {
 			t.Errorf("asArray=%v: logins = %d, want 1", asArray, got)
 		}
-		srv.Close()
 	}
 }
 
