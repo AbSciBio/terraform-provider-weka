@@ -117,6 +117,11 @@ func (p *wekaProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewFileSystemGroupResource,
 		NewFileSystemResource,
+		NewLdapResource,
+		NewLockoutPolicyResource,
+		NewObjectStoreBucketResource,
+		NewOrganizationResource,
+		NewUserResource,
 	}
 }
 
