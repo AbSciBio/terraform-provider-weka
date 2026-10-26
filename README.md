@@ -25,7 +25,17 @@ This provider owns configuration inside a cluster that is already up:
 
 Contributor conventions are in [AGENTS.md](AGENTS.md).
 
-The provider address is `registry.terraform.io/absci/weka`. The public registry only detects a public GitHub repository named `terraform-provider-weka`, so a GitHub mirror is required at publish time. This GitLab project uses that name already.
+The provider address is `registry.terraform.io/absci/weka`.
+
+## Publishing
+
+Development stays on this private GitLab project. Do not publish until all of these are done. `registry.terraform.io` only detects a public GitHub repository named `terraform-provider-weka`.
+
+- [ ] Public GitHub repository `terraform-provider-weka`, mirrored from this project.
+- [ ] `.goreleaser.yml` and `terraform-registry-manifest.json` (protocol `6.0`).
+- [ ] GPG signing key registered with the Terraform Registry.
+- [ ] `absci` namespace claimed on the registry.
+- [ ] Finalized GitHub release tagged `vX.Y.Z`. The tag must not also be a branch name. The release contains the per-OS zips, the manifest, `SHA256SUMS`, and a GPG signature of the checksums.
 
 ## License
 
