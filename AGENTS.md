@@ -43,6 +43,7 @@ Cross-resource references are plain UID strings. Do not reach into another resou
 
 - `/fileSystems/{inode_id}/getPath` and `/resolve` share an `operationId`; the overlay renames the first.
 - Login `data` is an object in the spec and an array in the docs example. `parseTokens` accepts both.
-- Second counts (`target_ssd_retention`, `start_demote`, ...) are `float32` in the spec. Expose them as `Int64`.
+- Second counts (`target_ssd_retention`, `start_demote`, ...) are `float32` in the spec, exact only up to `2^24` (about 194 days). Expose them as `Int64` with `int64validator.Between(0, 1<<24)`, so an out-of-range value is a plan-time error instead of a silently rounded one.
+- `updateFileSystemGroup` and `deleteFileSystemGroup` document only `400`/`401` in the spec — no `404`, unlike `getFileSystemGroup`. Confirm the real 404 behavior on PUT/DELETE before relying on `wekaapi.IsNotFound` there for another resource.
 - `resolvePath` types `inode_id` as a string but shows a number. Check the wire format before relying on it.
 - Not yet checked against a real cluster: create responses carrying `uid`, and 404 (rather than 400) for an unknown UID.

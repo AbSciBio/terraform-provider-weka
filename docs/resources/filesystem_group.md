@@ -29,8 +29,8 @@ resource "weka_filesystem_group" "tiered" {
 
 ### Optional
 
-- `start_demote` (Number) Seconds after a write before data is copied to the object store. Server default when unset.
-- `target_ssd_retention` (Number) Seconds data is kept on SSD before it is released to the object store. Server default when unset.
+- `start_demote` (Number) Seconds after a write before data is copied to the object store. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.
+- `target_ssd_retention` (Number) Seconds data is kept on SSD before it is released to the object store. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.
 
 ### Read-Only
 

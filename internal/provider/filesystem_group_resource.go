@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"gitlab.com/absci/devops/terraform-weka/internal/wekaapi"
@@ -55,16 +57,18 @@ func (r *fileSystemGroupResource) Schema(_ context.Context, _ resource.SchemaReq
 				Required:    true,
 			},
 			"target_ssd_retention": schema.Int64Attribute{
-				Description:   "Seconds data is kept on SSD before it is released to the object store. Server default when unset.",
+				Description:   "Seconds data is kept on SSD before it is released to the object store. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.",
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+				Validators:    []validator.Int64{int64validator.Between(0, maxExactSeconds)},
 			},
 			"start_demote": schema.Int64Attribute{
-				Description:   "Seconds after a write before data is copied to the object store. Server default when unset.",
+				Description:   "Seconds after a write before data is copied to the object store. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.",
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+				Validators:    []validator.Int64{int64validator.Between(0, maxExactSeconds)},
 			},
 		},
 	}
@@ -209,7 +213,11 @@ func fileSystemGroupFromAPI(g wekaapi.FileSystemGroup) fileSystemGroupModel {
 	}
 }
 
-// The spec types these second counts as float32. Exact up to 2^24 s (about 194 days).
+// The spec types these second counts as float32, which loses precision above
+// 2^24 (about 194 days): 16777217 round-trips as 16777216. The schema
+// validators reject anything past that so a value is never silently altered.
+const maxExactSeconds = 1 << 24
+
 func secondsPtr(v types.Int64) *float32 {
 	if v.IsNull() || v.IsUnknown() {
 		return nil

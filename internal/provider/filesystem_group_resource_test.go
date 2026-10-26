@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"sync"
 	"testing"
 
@@ -125,6 +126,15 @@ resource "weka_filesystem_group" "test" {
 				ImportState:       true,
 				ImportStateId:     "tier2",
 				ImportStateVerify: true,
+			},
+			{
+				// 2^24 + 1: the first value a float32 cannot represent exactly.
+				Config: f.config(`
+resource "weka_filesystem_group" "test" {
+  name                  = "tier2"
+  target_ssd_retention  = 16777217
+}`),
+				ExpectError: regexp.MustCompile(`(?s)Attribute target_ssd_retention.*between 0 and 16777216`),
 			},
 			{
 				// Deleted outside Terraform: Read drops it and the plan recreates it.
