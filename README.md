@@ -1,4 +1,4 @@
-# terraform-weka
+# terraform-provider-weka
 
 Terraform provider for configuring a running Weka cluster through its REST API.
 
@@ -25,7 +25,7 @@ This provider owns configuration inside a cluster that is already up:
 
 Contributor conventions are in [AGENTS.md](AGENTS.md).
 
-The public provider source will be something like `registry.terraform.io/<namespace>/weka`. The repo can be renamed to `terraform-provider-weka` at publish time; the registry protocol expects that name.
+The provider address is `registry.terraform.io/absci/weka`. The public registry only detects a public GitHub repository named `terraform-provider-weka`, so a GitHub mirror is required at publish time. This GitLab project uses that name already.
 
 ## License
 

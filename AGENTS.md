@@ -1,4 +1,4 @@
-# terraform-weka
+# terraform-provider-weka
 
 Terraform provider for configuration inside a running Weka cluster (filesystems, quotas, snapshot policies, S3, users). The Weka operator owns cluster layout; do not add resources for containers, drives, hosts, failure domains, KMS, or turning protocol services on.
 
