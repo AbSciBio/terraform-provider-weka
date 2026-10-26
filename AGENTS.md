@@ -9,6 +9,12 @@ This repo will be published. No cluster names, endpoints, credentials, or intern
 ```bash
 go generate ./...                 # regenerate the API client and docs/
 go vet ./... && go test -race ./...
+
+# Real cluster. Skipped unless TF_ACC=1. Creates only names starting with
+# tfacc-, deletes them afterwards, and fails if any other filesystem group
+# disappeared. Set WEKA_ENDPOINT, WEKA_USERNAME, WEKA_PASSWORD, and
+# WEKA_INSECURE=true. Do not point this at a production cluster.
+TF_ACC=1 go test -count=1 -timeout 15m -run TestAcc ./internal/provider/
 ```
 
 Commit the output of `go generate`. CI fails if it is stale.
@@ -46,4 +52,5 @@ Cross-resource references are plain UID strings. Do not reach into another resou
 - Second counts (`target_ssd_retention`, `start_demote`, ...) are `float32` in the spec, exact only up to `2^24` (about 194 days). Expose them as `Int64` with `int64validator.Between(0, 1<<24)`, so an out-of-range value is a plan-time error instead of a silently rounded one.
 - `updateFileSystemGroup` and `deleteFileSystemGroup` document only `400`/`401` in the spec — no `404`, unlike `getFileSystemGroup`. Confirm the real 404 behavior on PUT/DELETE before relying on `wekaapi.IsNotFound` there for another resource.
 - `resolvePath` types `inode_id` as a string but shows a number. Check the wire format before relying on it.
-- Not yet checked against a real cluster: create responses carrying `uid`, and 404 (rather than 400) for an unknown UID.
+- A filesystem group with only one of `target_ssd_retention` / `start_demote` is rejected (`HTTP 400: must specify both demotion and retention time`). Omit both, or set both. When both are set, `start_demote` must be at most `target_ssd_retention / 3`. `ValidateConfig` enforces both.
+- Not yet checked against a real cluster: 404 (rather than 400) for an unknown UID on delete.

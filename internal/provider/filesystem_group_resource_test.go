@@ -114,11 +114,20 @@ resource "weka_filesystem_group" "test" {
   name                 = "tier2"
   target_ssd_retention = 3600
 }`),
+				ExpectError: regexp.MustCompile(`Set both target_ssd_retention and start_demote`),
+			},
+			{
+				Config: f.config(`
+resource "weka_filesystem_group" "test" {
+  name                 = "tier2"
+  target_ssd_retention = 3600
+  start_demote         = 900
+}`),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("weka_filesystem_group.test", "id", "uid-1"),
 					resource.TestCheckResourceAttr("weka_filesystem_group.test", "name", "tier2"),
 					resource.TestCheckResourceAttr("weka_filesystem_group.test", "target_ssd_retention", "3600"),
-					resource.TestCheckResourceAttr("weka_filesystem_group.test", "start_demote", "1800"),
+					resource.TestCheckResourceAttr("weka_filesystem_group.test", "start_demote", "900"),
 				),
 			},
 			{
@@ -128,11 +137,21 @@ resource "weka_filesystem_group" "test" {
 				ImportStateVerify: true,
 			},
 			{
+				Config: f.config(`
+resource "weka_filesystem_group" "test" {
+  name                 = "tier2"
+  target_ssd_retention = 120
+  start_demote         = 41
+}`),
+				ExpectError: regexp.MustCompile(`start_demote \(41\) must be at most target_ssd_retention / 3 \(40\)`),
+			},
+			{
 				// 2^24 + 1: the first value a float32 cannot represent exactly.
 				Config: f.config(`
 resource "weka_filesystem_group" "test" {
-  name                  = "tier2"
-  target_ssd_retention  = 16777217
+  name                 = "tier2"
+  target_ssd_retention = 16777217
+  start_demote         = 900
 }`),
 				ExpectError: regexp.MustCompile(`(?s)Attribute target_ssd_retention.*between 0 and 16777216`),
 			},
@@ -143,6 +162,7 @@ resource "weka_filesystem_group" "test" {
 resource "weka_filesystem_group" "test" {
   name                 = "tier2"
   target_ssd_retention = 3600
+  start_demote         = 900
 }`),
 				Check: resource.TestCheckResourceAttr("weka_filesystem_group.test", "id", "uid-2"),
 			},

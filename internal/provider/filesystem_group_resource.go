@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -19,9 +21,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = (*fileSystemGroupResource)(nil)
-	_ resource.ResourceWithConfigure   = (*fileSystemGroupResource)(nil)
-	_ resource.ResourceWithImportState = (*fileSystemGroupResource)(nil)
+	_ resource.Resource                   = (*fileSystemGroupResource)(nil)
+	_ resource.ResourceWithConfigure      = (*fileSystemGroupResource)(nil)
+	_ resource.ResourceWithImportState    = (*fileSystemGroupResource)(nil)
+	_ resource.ResourceWithValidateConfig = (*fileSystemGroupResource)(nil)
 )
 
 func NewFileSystemGroupResource() resource.Resource {
@@ -76,6 +79,35 @@ func (r *fileSystemGroupResource) Schema(_ context.Context, _ resource.SchemaReq
 
 func (r *fileSystemGroupResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	r.api = configuredAPI(req.ProviderData, &resp.Diagnostics)
+}
+
+// Weka returns HTTP 400 ("must specify both demotion and retention time") when
+// exactly one of the two is set. Omitting both lets the server apply its default.
+func (r *fileSystemGroupResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data fileSystemGroupModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() || data.TargetSSDRetention.IsUnknown() || data.StartDemote.IsUnknown() {
+		return
+	}
+	if data.TargetSSDRetention.IsNull() != data.StartDemote.IsNull() {
+		resp.Diagnostics.AddError(
+			"Filesystem group policy is incomplete",
+			"Set both target_ssd_retention and start_demote, or neither. Weka rejects a group with only one of them.",
+		)
+		return
+	}
+	if data.TargetSSDRetention.IsNull() {
+		return
+	}
+	// "Start Demote is larger than SSD Retention / 3" is a 400 from the API.
+	retention, demote := data.TargetSSDRetention.ValueInt64(), data.StartDemote.ValueInt64()
+	if demote > retention/3 {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("start_demote"),
+			"Filesystem group policy is illegal",
+			fmt.Sprintf("start_demote (%d) must be at most target_ssd_retention / 3 (%d).", demote, retention/3),
+		)
+	}
 }
 
 func (r *fileSystemGroupResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
