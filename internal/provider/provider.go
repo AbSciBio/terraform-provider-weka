@@ -116,6 +116,7 @@ func stringOrEnv(v types.String, env string) string {
 func (p *wekaProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewFileSystemGroupResource,
+		NewOrganizationResource,
 	}
 }
 
