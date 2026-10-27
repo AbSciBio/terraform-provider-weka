@@ -54,9 +54,9 @@ Terraform warns on every plan/apply while an override is active. That is expecte
 
 - [x] Public GitHub repository `AbSciBio/terraform-provider-weka`.
 - [x] `.goreleaser.yml` and `terraform-registry-manifest.json` (protocol `6.0`).
-- [ ] GPG signing key, RSA or DSA. Register the public key on the `abscibio` namespace. Store the private key as GitHub Actions secrets `GPG_PRIVATE_KEY` and `PASSPHRASE`. The release workflow does not run until those exist.
+- [ ] RSA or DSA signing key. Store the private key as Actions secrets `GPG_PRIVATE_KEY` and `PASSPHRASE`, and register the public key on the `abscibio` namespace. CI cuts no tag until both secrets exist.
 - [ ] `abscibio` namespace claimed: sign in to the registry with a GitHub account that admins `AbSciBio`, then Publish → Provider.
-- [ ] Finalized GitHub release tagged `vX.Y.Z`. The tag must not also be a branch name. Pushing the tag runs the release workflow, which uploads the per-OS zips, the manifest, `SHA256SUMS`, and a GPG signature of the checksums.
+- [x] Tags and binaries are one CI job. A `feat` or `fix` commit on `main` or `feat/provider-scaffold` runs semantic-release, then GoReleaser uploads the per-OS zips, the manifest, `SHA256SUMS`, and a GPG signature of the checksums. The tag must not also be a branch name.
 
 ## License
 

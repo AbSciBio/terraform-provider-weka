@@ -1,4 +1,4 @@
-module gitlab.com/absci/devops/terraform-provider-weka
+module github.com/AbSciBio/terraform-provider-weka
 
 go 1.25.8
 

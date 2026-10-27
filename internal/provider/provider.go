@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"gitlab.com/absci/devops/terraform-provider-weka/internal/wekaapi"
+	"github.com/AbSciBio/terraform-provider-weka/internal/wekaapi"
 )
 
 var _ provider.Provider = (*wekaProvider)(nil)

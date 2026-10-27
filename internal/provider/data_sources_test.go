@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
-	"gitlab.com/absci/devops/terraform-provider-weka/internal/wekaapi"
+	"github.com/AbSciBio/terraform-provider-weka/internal/wekaapi"
 )
 
 func TestFileSystemGroupDataSource(t *testing.T) {

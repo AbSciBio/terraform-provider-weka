@@ -56,6 +56,8 @@ signs:
       - "--detach-sign"
       - "${artifact}"
 release:
+  # semantic-release writes the notes. Keep them and upload the zips onto that release.
+  mode: keep-existing
   extra_files:
     - glob: 'terraform-registry-manifest.json'
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'

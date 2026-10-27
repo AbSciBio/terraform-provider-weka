@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
-	"gitlab.com/absci/devops/terraform-provider-weka/internal/wekaapi"
+	"github.com/AbSciBio/terraform-provider-weka/internal/wekaapi"
 )
 
 func TestAccOrganization(t *testing.T) {

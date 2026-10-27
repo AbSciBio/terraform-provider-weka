@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 
-	"gitlab.com/absci/devops/terraform-provider-weka/internal/wekaapi"
+	"github.com/AbSciBio/terraform-provider-weka/internal/wekaapi"
 )
 
 var (

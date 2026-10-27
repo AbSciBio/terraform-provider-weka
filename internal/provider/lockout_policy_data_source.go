@@ -6,7 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 
-	"gitlab.com/absci/devops/terraform-provider-weka/internal/wekaapi"
+	"github.com/AbSciBio/terraform-provider-weka/internal/wekaapi"
 )
 
 var (

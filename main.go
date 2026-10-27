@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"gitlab.com/absci/devops/terraform-provider-weka/internal/provider"
+	"github.com/AbSciBio/terraform-provider-weka/internal/provider"
 )
 
 //go:generate go tool tfplugindocs generate --provider-name weka

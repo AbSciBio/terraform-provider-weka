@@ -19,7 +19,7 @@ TF_ACC=1 go test -count=1 -timeout 15m -run TestAcc ./internal/provider/
 
 Commit the output of `go generate`. CI fails if it is stale.
 
-GitHub Actions (`.github/workflows/`) runs the same `go generate` / `go vet` / `go test -race` on every push. Acceptance tests are `workflow_dispatch` only. A `v*` tag runs GoReleaser; that job needs the `GPG_PRIVATE_KEY` and `PASSPHRASE` secrets and does nothing until a tag exists.
+GitHub Actions runs `go generate` / `go vet` / `go test -race` on every push. Acceptance tests are `workflow_dispatch` only. A push to `main` or `feat/provider-scaffold` runs semantic-release, which tags `feat` and `fix` commits, then GoReleaser publishes the binaries in that same job. That job needs the `GPG_PRIVATE_KEY` and `PASSPHRASE` secrets.
 
 ## Layout
 
