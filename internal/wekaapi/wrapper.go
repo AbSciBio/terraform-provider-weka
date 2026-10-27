@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Config is how to reach and log in to one Weka cluster.
@@ -78,30 +80,58 @@ type authDoer struct {
 }
 
 func (a *authDoer) Do(req *http.Request) (*http.Response, error) {
-	tok, err := a.accessToken(req.Context(), "")
+	ctx := req.Context()
+	fields := map[string]any{"method": req.Method, "path": req.URL.Path}
+	tflog.Debug(ctx, "weka API request", fields)
+
+	tok, err := a.accessToken(ctx, "")
 	if err != nil {
+		tflog.Error(ctx, "weka API request failed", mergeFields(fields, "error", err.Error()))
 		return nil, err
 	}
 	resp, err := a.send(req, tok)
-	if err != nil || resp.StatusCode != http.StatusUnauthorized {
+	if err != nil {
+		tflog.Error(ctx, "weka API request failed", mergeFields(fields, "error", err.Error()))
 		return resp, err
 	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		tflog.Debug(ctx, "weka API response", mergeFields(fields, "status", resp.StatusCode))
+		return resp, nil
+	}
 	if req.Body != nil && req.GetBody == nil {
+		tflog.Debug(ctx, "weka API response", mergeFields(fields, "status", resp.StatusCode))
 		return resp, nil
 	}
 	_ = resp.Body.Close()
+	tflog.Debug(ctx, "weka API token rejected, retrying after re-login", fields)
 
-	tok, err = a.accessToken(req.Context(), tok)
+	tok, err = a.accessToken(ctx, tok)
 	if err != nil {
+		tflog.Error(ctx, "weka API request failed", mergeFields(fields, "error", err.Error()))
 		return nil, err
 	}
-	retry := req.Clone(req.Context())
+	retry := req.Clone(ctx)
 	if req.GetBody != nil {
 		if retry.Body, err = req.GetBody(); err != nil {
 			return nil, err
 		}
 	}
-	return a.send(retry, tok)
+	resp, err = a.send(retry, tok)
+	if err != nil {
+		tflog.Error(ctx, "weka API request failed", mergeFields(fields, "error", err.Error()))
+		return resp, err
+	}
+	tflog.Debug(ctx, "weka API response", mergeFields(fields, "status", resp.StatusCode))
+	return resp, nil
+}
+
+func mergeFields(base map[string]any, k string, v any) map[string]any {
+	out := make(map[string]any, len(base)+1)
+	for bk, bv := range base {
+		out[bk] = bv
+	}
+	out[k] = v
+	return out
 }
 
 func (a *authDoer) send(req *http.Request, tok string) (*http.Response, error) {
@@ -120,6 +150,7 @@ func (a *authDoer) accessToken(ctx context.Context, rejected string) (string, er
 		return a.token, nil
 	}
 
+	tflog.Debug(ctx, "weka: logging in", map[string]any{"org": a.cfg.Org})
 	body := LoginJSONRequestBody{Username: a.cfg.Username, Password: a.cfg.Password}
 	if a.cfg.Org != "" {
 		body.Org = &a.cfg.Org

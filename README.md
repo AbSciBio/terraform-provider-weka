@@ -27,6 +27,27 @@ Contributor conventions are in [AGENTS.md](AGENTS.md).
 
 The provider address is `registry.terraform.io/absci/weka`.
 
+## Using an unpublished build
+
+Build the binary and point Terraform at it with [`dev_overrides`](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers),
+so `terraform init` is not needed and no Terraform Registry entry has to exist yet:
+
+```shell
+go build -o ~/go/bin/terraform-provider-weka .
+```
+
+```hcl
+# ~/.terraformrc
+provider_installation {
+  dev_overrides {
+    "registry.terraform.io/absci/weka" = "/Users/you/go/bin"
+  }
+  direct {}
+}
+```
+
+Terraform warns on every plan/apply while an override is active. That is expected.
+
 ## Publishing
 
 Development stays on this private GitLab project. Do not publish until all of these are done. `registry.terraform.io` only detects a public GitHub repository named `terraform-provider-weka`.

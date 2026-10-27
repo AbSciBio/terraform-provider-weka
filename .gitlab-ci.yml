@@ -5,3 +5,13 @@ test:
     - test -z "$(git status --porcelain)" || { git status --porcelain; echo "go generate output is stale; run it and commit"; exit 1; }
     - go vet ./...
     - go test -race ./...
+
+# Hits a real Weka cluster: only tfacc-prefixed resources, never run automatically.
+# Set WEKA_ENDPOINT, WEKA_USERNAME, WEKA_PASSWORD (and optionally WEKA_ORG,
+# WEKA_INSECURE) as masked CI/CD variables before running this manually.
+testacc:
+  image: golang:1.25
+  script:
+    - TF_ACC=1 go test -timeout 15m -v ./internal/provider/
+  when: manual
+  allow_failure: true
