@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -155,22 +156,38 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 }
 
 func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state userModel
+	var plan, state, cfg userModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	uid := state.ID.ValueString()
-	if !plan.Role.Equal(state.Role) || !plan.PosixUID.Equal(state.PosixUID) || !plan.PosixGID.Equal(state.PosixGID) {
-		out, err := r.api.UpdateUserWithResponse(ctx, uid, wekaapi.UpdateUserJSONRequestBody{
-			Role:     rolePtr(plan.Role),
-			PosixUid: secondsPtr(plan.PosixUID),
-			PosixGid: secondsPtr(plan.PosixGID),
-		})
+	// Posix ids are sent only when configured. The server default read back
+	// into state does not survive float32, and sending it fails the update.
+	body := wekaapi.UpdateUserJSONRequestBody{}
+	if !plan.Role.Equal(state.Role) {
+		body.Role = rolePtr(plan.Role)
+	}
+	if !cfg.PosixUID.IsNull() && !cfg.PosixUID.IsUnknown() && !plan.PosixUID.Equal(state.PosixUID) {
+		body.PosixUid = secondsPtr(cfg.PosixUID)
+	}
+	if !cfg.PosixGID.IsNull() && !cfg.PosixGID.IsUnknown() && !plan.PosixGID.Equal(state.PosixGID) {
+		body.PosixGid = secondsPtr(cfg.PosixGID)
+	}
+	if body.Role != nil || body.PosixUid != nil || body.PosixGid != nil {
+		// The raw call keeps a 400 body when data is a string. WithResponse
+		// drops that body because it expects N400.data to be an object.
+		rsp, err := r.api.UpdateUser(ctx, uid, body)
 		if err == nil {
-			err = wekaapi.Check(out.StatusCode(), out.Body)
+			var raw []byte
+			raw, err = io.ReadAll(rsp.Body)
+			_ = rsp.Body.Close()
+			if err == nil {
+				err = wekaapi.Check(rsp.StatusCode, raw)
+			}
 		}
 		if err != nil {
 			resp.Diagnostics.AddError("Updating user", err.Error())

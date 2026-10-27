@@ -71,7 +71,7 @@ func TestAccFileSystem(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: accFileSystemConfig(group, name, 1073741824, "ssd_capacity   = 1073741824\n  auth_required  = false"),
+				Config: accFileSystemConfig(group, name, 1073741824, "", "auth_required = false"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					accFileSystemMustBeOurs(group, name),
 					resource.TestCheckResourceAttr("weka_filesystem.test", "name", name),
@@ -83,12 +83,14 @@ func TestAccFileSystem(t *testing.T) {
 				),
 			},
 			{
-				Config: accFileSystemConfig(group, renamed, 2147483648, "ssd_capacity   = 1073741824\n  auth_required  = true"),
+				// Still not tiered, so SSD stays equal to total and is not sent.
+				Config: accFileSystemConfig(group, renamed, 2147483648, "", "auth_required = true"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					accFileSystemMustBeOurs(group, renamed),
 					resource.TestCheckResourceAttr("weka_filesystem.test", "name", renamed),
 					resource.TestCheckResourceAttr("weka_filesystem.test", "group_name", group),
 					resource.TestCheckResourceAttr("weka_filesystem.test", "total_capacity", "2147483648"),
+					resource.TestCheckResourceAttr("weka_filesystem.test", "ssd_capacity", "2147483648"),
 					resource.TestCheckResourceAttr("weka_filesystem.test", "auth_required", "true"),
 				),
 			},
@@ -102,7 +104,7 @@ func TestAccFileSystem(t *testing.T) {
 	})
 }
 
-func accFileSystemConfig(group, name string, total int64, attrs string) string {
+func accFileSystemConfig(group, name string, total int64, groupAttrs, fsAttrs string) string {
 	if !strings.HasPrefix(group, accPrefix) || !strings.HasPrefix(name, accPrefix) {
 		panic("acceptance config name is outside " + accPrefix)
 	}
@@ -111,6 +113,7 @@ provider "weka" {}
 
 resource "weka_filesystem_group" "test" {
   name = %q
+  %s
 }
 
 resource "weka_filesystem" "test" {
@@ -119,7 +122,7 @@ resource "weka_filesystem" "test" {
   total_capacity = %d
   %s
 }
-`, group, name, total, attrs)
+`, group, groupAttrs, name, total, fsAttrs)
 }
 
 func accFileSystemMustBeOurs(group, name string) resource.TestCheckFunc {

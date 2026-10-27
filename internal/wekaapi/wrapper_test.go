@@ -144,10 +144,11 @@ func TestLoginFailureIsAPIError(t *testing.T) {
 
 func TestCheckMessages(t *testing.T) {
 	cases := map[string]string{
-		`{"message":"not found"}`:                  "not found",
-		`{"data":"Unauthorized"}`:                  "Unauthorized",
-		`{"data":{"error":"param2 has an error"}}`: "param2 has an error",
-		`plain text`:                               "plain text",
+		`{"message":"not found"}`:                    "not found",
+		`{"message":"Invalid params","data":"role"}`: "Invalid params: \"role\"",
+		`{"data":"Unauthorized"}`:                    "Unauthorized",
+		`{"data":{"error":"param2 has an error"}}`:   "param2 has an error",
+		`plain text`: "plain text",
 	}
 	for body, want := range cases {
 		err := Check(400, []byte(body))

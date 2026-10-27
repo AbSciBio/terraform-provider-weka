@@ -2,11 +2,12 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -70,18 +71,18 @@ func (r *organizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				PlanModifiers: []planmodifier.String{replaceWhenKnown()},
 			},
 			"ssd_quota": schema.Int64Attribute{
-				Description:   "SSD quota. The API describes a capacity such as 1GiB, and types the field as float32, which stores integers exactly only through 16777216 (2^24). Values must be from 0 to 16777216 so a quota is never silently rounded. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.",
+				Description:   "SSD quota in bytes. The cluster rounds this up to a multiple of 8192, and the API stores it as a float32 whose JSON decimal must be that same integer. A value that would change is rejected at plan time. The cluster also enforces a minimum. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.",
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
-				Validators:    []validator.Int64{int64validator.Between(0, 1<<24)},
+				Validators:    []validator.Int64{exactSeconds(), quotaSendable()},
 			},
 			"total_quota": schema.Int64Attribute{
-				Description:   "Total quota. The API describes a capacity such as 1GiB, and types the field as float32, which stores integers exactly only through 16777216 (2^24). Values must be from 0 to 16777216 so a quota is never silently rounded. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.",
+				Description:   "Total quota in bytes. The cluster rounds this up to a multiple of 8192, and the API stores it as a float32 whose JSON decimal must be that same integer. A value that would change is rejected at plan time. The cluster also enforces a minimum. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.",
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
-				Validators:    []validator.Int64{int64validator.Between(0, 1<<24)},
+				Validators:    []validator.Int64{exactSeconds(), quotaSendable()},
 			},
 		},
 	}
@@ -265,9 +266,61 @@ func replaceWhenKnown() planmodifier.String {
 	)
 }
 
-// The spec types these quotas as float32, which loses precision above 2^24:
-// 16777217 round-trips as 16777216. The schema validators reject anything
-// past that so a value is never silently altered.
+// quotaAlign is the step weka-test-ord used when it stored 2147488000 as
+// 2147491840. 2147491840 is the next multiple of 8192.
+const quotaAlign int64 = 8192
+
+func quotaSendable() validator.Int64 { return quotaSendableValidator{} }
+
+type quotaSendableValidator struct{}
+
+func (quotaSendableValidator) Description(context.Context) string {
+	return "must be a multiple of 8192 that float32 JSON can send unchanged"
+}
+
+func (quotaSendableValidator) MarkdownDescription(ctx context.Context) string {
+	return quotaSendableValidator{}.Description(ctx)
+}
+
+func (quotaSendableValidator) ValidateInt64(_ context.Context, req validator.Int64Request, resp *validator.Int64Response) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() || !exactSecondsValue(req.ConfigValue.ValueInt64()) {
+		return
+	}
+	n := req.ConfigValue.ValueInt64()
+	if w := quotaWire(n); w != n {
+		resp.Diagnostics.AddAttributeError(req.Path, "Quota would change on the cluster",
+			fmt.Sprintf("%d would be stored as %d. Set the quota to %d.", n, w, w))
+	}
+}
+
+// quotaWire is the integer the API will store. The cluster rounds up to a
+// multiple of 8192, and encoding/json can emit a different decimal for a
+// float32 that is exact in memory. 1 GiB is exact in memory and still goes
+// out as 1073741800, which is under the cluster minimum.
+func quotaWire(n int64) int64 {
+	if n <= 0 {
+		return n
+	}
+	if n%quotaAlign != 0 {
+		n += quotaAlign - n%quotaAlign
+	}
+	for range 4096 {
+		if exactSecondsValue(n) && quotaJSONExact(n) {
+			return n
+		}
+		n += quotaAlign
+	}
+	return n
+}
+
+func quotaJSONExact(n int64) bool {
+	b, err := json.Marshal(float32(n))
+	return err == nil && string(b) == strconv.FormatInt(n, 10)
+}
+
+// The spec types these quotas as float32. exactSeconds rejects a value that
+// would be stored as a different number. quotaWire then picks a nearby value
+// the cluster will keep.
 func quotaPtr(v types.Int64) *float32 {
 	if v.IsNull() || v.IsUnknown() {
 		return nil

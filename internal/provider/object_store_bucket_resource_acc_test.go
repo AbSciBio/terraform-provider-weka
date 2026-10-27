@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -13,7 +14,10 @@ import (
 )
 
 func TestAccObjectStoreBucket(t *testing.T) {
-	// resource.Test skips unless TF_ACC=1, so CI never touches a cluster.
+	// Weka contacts the bucket during create and rejects a placeholder endpoint.
+	if os.Getenv("WEKA_OBS_HOSTNAME") == "" || os.Getenv("WEKA_OBS_BUCKET") == "" || os.Getenv("WEKA_OBS_REGION") == "" || os.Getenv("WEKA_OBS_ACCESS_KEY_ID") == "" || os.Getenv("WEKA_OBS_SECRET_KEY") == "" {
+		t.Skip("set WEKA_OBS_HOSTNAME, WEKA_OBS_BUCKET, WEKA_OBS_REGION, WEKA_OBS_ACCESS_KEY_ID, and WEKA_OBS_SECRET_KEY to a bucket this cluster can verify")
+	}
 	api := accAPI(t)
 	if api != nil {
 		t.Cleanup(func() { sweepObjectStoreBuckets(t, api) })
@@ -51,20 +55,19 @@ func TestAccObjectStoreBucket(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: objectStoreBucketAccConfig(name, "s3.example.com"),
+				Config: objectStoreBucketAccConfig(name),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					accBucketMustBeOurs(name),
 					resource.TestCheckResourceAttr("weka_object_store_bucket.test", "name", name),
-					resource.TestCheckResourceAttr("weka_object_store_bucket.test", "hostname", "s3.example.com"),
+					resource.TestCheckResourceAttr("weka_object_store_bucket.test", "hostname", os.Getenv("WEKA_OBS_HOSTNAME")),
 					resource.TestCheckResourceAttrSet("weka_object_store_bucket.test", "id"),
 				),
 			},
 			{
-				Config: objectStoreBucketAccConfig(renamed, "s3.backup.example.com"),
+				Config: objectStoreBucketAccConfig(renamed),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					accBucketMustBeOurs(renamed),
 					resource.TestCheckResourceAttr("weka_object_store_bucket.test", "name", renamed),
-					resource.TestCheckResourceAttr("weka_object_store_bucket.test", "hostname", "s3.backup.example.com"),
 				),
 			},
 			{
@@ -78,7 +81,7 @@ func TestAccObjectStoreBucket(t *testing.T) {
 	})
 }
 
-func objectStoreBucketAccConfig(name, hostname string) string {
+func objectStoreBucketAccConfig(name string) string {
 	if !strings.HasPrefix(name, accPrefix) {
 		panic("acceptance config name " + name + " is outside " + accPrefix)
 	}
@@ -87,17 +90,17 @@ provider "weka" {}
 
 resource "weka_object_store_bucket" "test" {
   name          = %q
-  obs_name      = "default"
+  obs_name      = "default-local"
   protocol      = "HTTPS"
   hostname      = %q
   port          = 443
   bucket        = %q
   auth_method   = "AWSSignature4"
-  region        = "us-east-1"
-  access_key_id = "placeholder-access-key"
-  secret_key    = "placeholder-secret-key"
+  region        = %q
+  access_key_id = %q
+  secret_key    = %q
 }
-`, name, hostname, name)
+`, name, os.Getenv("WEKA_OBS_HOSTNAME"), os.Getenv("WEKA_OBS_BUCKET"), os.Getenv("WEKA_OBS_REGION"), os.Getenv("WEKA_OBS_ACCESS_KEY_ID"), os.Getenv("WEKA_OBS_SECRET_KEY"))
 }
 
 func accBucketMustBeOurs(name string) resource.TestCheckFunc {

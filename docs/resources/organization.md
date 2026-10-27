@@ -33,8 +33,8 @@ resource "weka_organization" "example" {
 
 ### Optional
 
-- `ssd_quota` (Number) SSD quota. The API describes a capacity such as 1GiB, and types the field as float32, which stores integers exactly only through 16777216 (2^24). Values must be from 0 to 16777216 so a quota is never silently rounded. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.
-- `total_quota` (Number) Total quota. The API describes a capacity such as 1GiB, and types the field as float32, which stores integers exactly only through 16777216 (2^24). Values must be from 0 to 16777216 so a quota is never silently rounded. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.
+- `ssd_quota` (Number) SSD quota in bytes. The cluster rounds this up to a multiple of 8192, and the API stores it as a float32 whose JSON decimal must be that same integer. A value that would change is rejected at plan time. The cluster also enforces a minimum. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.
+- `total_quota` (Number) Total quota in bytes. The cluster rounds this up to a multiple of 8192, and the API stores it as a float32 whose JSON decimal must be that same integer. A value that would change is rejected at plan time. The cluster also enforces a minimum. Server default on create. Removing this later keeps the current value, since the API has no way to ask for the default back.
 
 ### Read-Only
 

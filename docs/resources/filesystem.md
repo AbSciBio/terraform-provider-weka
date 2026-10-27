@@ -34,7 +34,7 @@ resource "weka_filesystem" "data" {
 
 - `auth_required` (Boolean) Require an authenticated user to mount this filesystem. Only takes effect in the root organization. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.
 - `encrypted` (Boolean) Encrypt the filesystem. Changing it replaces the filesystem. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.
-- `ssd_capacity` (Number) SSD capacity in bytes. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.
+- `ssd_capacity` (Number) SSD capacity in bytes. Omit it when the filesystem is not tiered; the cluster sets it equal to total_capacity. A different value requires an object store attached to the filesystem.
 
 ### Read-Only
 

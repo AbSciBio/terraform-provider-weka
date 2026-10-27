@@ -86,6 +86,26 @@ func fakeOrganizations(t *testing.T, f *fakeWeka) *sync.Map {
 	return &store
 }
 
+func TestQuotaWire(t *testing.T) {
+	if quotaWire(1074790400) != 1074790400 {
+		t.Fatalf("stable quota changed: %d", quotaWire(1074790400))
+	}
+	if quotaWire(2147488000) != 2147532800 || quotaWire(2147532800) != 2147532800 {
+		t.Fatalf("2147488000 -> %d", quotaWire(2147488000))
+	}
+	four := quotaWire(1 << 32)
+	if quotaWire(four) != four || four <= 2147532800 {
+		t.Fatalf("4 GiB wire %d", four)
+	}
+	if quotaWire(4295065600) != 4295065600 {
+		t.Fatalf("4295065600 -> %d", quotaWire(4295065600))
+	}
+	// 1 GiB is exact in float32 memory and still encodes low.
+	if quotaWire(1<<30) <= 1<<30 || !quotaJSONExact(quotaWire(1<<30)) {
+		t.Fatalf("1 GiB -> %d", quotaWire(1<<30))
+	}
+}
+
 func TestOrganizationResource(t *testing.T) {
 	f := newFakeWeka(t)
 	store := fakeOrganizations(t, f)
@@ -107,16 +127,16 @@ resource "weka_organization" "test" {
   name        = "org"
   username    = "org-admin"
   password    = "placeholder"
-  ssd_quota   = 1024
-  total_quota = 2048
+  ssd_quota   = 8192
+  total_quota = 16384
 }`),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("weka_organization.test", "id", "uid-1"),
 					resource.TestCheckResourceAttr("weka_organization.test", "name", "org"),
 					resource.TestCheckResourceAttr("weka_organization.test", "username", "org-admin"),
 					resource.TestCheckResourceAttr("weka_organization.test", "password", "placeholder"),
-					resource.TestCheckResourceAttr("weka_organization.test", "ssd_quota", "1024"),
-					resource.TestCheckResourceAttr("weka_organization.test", "total_quota", "2048"),
+					resource.TestCheckResourceAttr("weka_organization.test", "ssd_quota", "8192"),
+					resource.TestCheckResourceAttr("weka_organization.test", "total_quota", "16384"),
 				),
 			},
 			{
@@ -125,14 +145,14 @@ resource "weka_organization" "test" {
   name        = "org2"
   username    = "org-admin"
   password    = "placeholder"
-  ssd_quota   = 1024
-  total_quota = 2048
+  ssd_quota   = 8192
+  total_quota = 16384
 }`),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("weka_organization.test", "id", "uid-1"),
 					resource.TestCheckResourceAttr("weka_organization.test", "name", "org2"),
-					resource.TestCheckResourceAttr("weka_organization.test", "ssd_quota", "1024"),
-					resource.TestCheckResourceAttr("weka_organization.test", "total_quota", "2048"),
+					resource.TestCheckResourceAttr("weka_organization.test", "ssd_quota", "8192"),
+					resource.TestCheckResourceAttr("weka_organization.test", "total_quota", "16384"),
 				),
 			},
 			{
@@ -141,14 +161,14 @@ resource "weka_organization" "test" {
   name        = "org2"
   username    = "org-admin"
   password    = "placeholder"
-  ssd_quota   = 4096
-  total_quota = 8192
+  ssd_quota   = 16384
+  total_quota = 32768
 }`),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("weka_organization.test", "id", "uid-1"),
 					resource.TestCheckResourceAttr("weka_organization.test", "name", "org2"),
-					resource.TestCheckResourceAttr("weka_organization.test", "ssd_quota", "4096"),
-					resource.TestCheckResourceAttr("weka_organization.test", "total_quota", "8192"),
+					resource.TestCheckResourceAttr("weka_organization.test", "ssd_quota", "16384"),
+					resource.TestCheckResourceAttr("weka_organization.test", "total_quota", "32768"),
 				),
 			},
 			{
@@ -173,8 +193,8 @@ resource "weka_organization" "test" {
   name        = "org2"
   username    = "org-admin"
   password    = "placeholder"
-  ssd_quota   = 4096
-  total_quota = 8192
+  ssd_quota   = 16384
+  total_quota = 32768
 }`),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("weka_organization.test", "id", "uid-1"),
@@ -192,7 +212,7 @@ resource "weka_organization" "test" {
   ssd_quota   = 16777217
   total_quota = 8192
 }`),
-				ExpectError: regexp.MustCompile(`(?s)Attribute ssd_quota.*between 0 and 16777216`),
+				ExpectError: regexp.MustCompile(`16777217 cannot be stored exactly as a float32`),
 			},
 			{
 				// Deleted outside Terraform: Read drops it and the plan recreates it.
@@ -202,8 +222,8 @@ resource "weka_organization" "test" {
   name        = "org2"
   username    = "org-admin"
   password    = "placeholder"
-  ssd_quota   = 4096
-  total_quota = 8192
+  ssd_quota   = 16384
+  total_quota = 32768
 }`),
 				Check: resource.TestCheckResourceAttr("weka_organization.test", "id", "uid-2"),
 			},

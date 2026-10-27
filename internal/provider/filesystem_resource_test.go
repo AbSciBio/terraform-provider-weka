@@ -93,6 +93,9 @@ func fakeFileSystems(t *testing.T, f *fakeWeka) *sync.Map {
 		}
 		if body.SsdCapacity != nil {
 			fs.SsdBudget = body.SsdCapacity
+		} else if fs.TotalBudget != nil {
+			// A non-tiered filesystem stores SSD equal to total when SSD is omitted.
+			fs.SsdBudget = i64p(*fs.TotalBudget)
 		}
 		if body.AuthRequired != nil {
 			fs.AuthRequired = body.AuthRequired
@@ -140,6 +143,18 @@ resource "weka_filesystem" "test" {
 					resource.TestCheckResourceAttr("weka_filesystem.test", "ssd_capacity", "1073741824"),
 					resource.TestCheckResourceAttr("weka_filesystem.test", "auth_required", "false"),
 					resource.TestCheckResourceAttr("weka_filesystem.test", "encrypted", "false"),
+				),
+			},
+			{
+				Config: f.config(`
+resource "weka_filesystem" "test" {
+  name           = "data"
+  group_name     = "tier"
+  total_capacity = 2147483648
+}`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("weka_filesystem.test", "total_capacity", "2147483648"),
+					resource.TestCheckResourceAttr("weka_filesystem.test", "ssd_capacity", "2147483648"),
 				),
 			},
 			{

@@ -205,6 +205,9 @@ func errorMessage(body []byte) string {
 	}
 	if json.Unmarshal(body, &env) == nil {
 		if env.Message != "" {
+			if detail := strings.TrimSpace(string(env.Data)); detail != "" && detail != "null" {
+				return env.Message + ": " + detail
+			}
 			return env.Message
 		}
 		var s string

@@ -54,23 +54,25 @@ func TestAccOrganization(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: organizationConfig(name, username, password, "ssd_quota = 1024\n  total_quota = 2048"),
+				// Multiples of 8192 that float32 JSON sends unchanged. 1 GiB encodes low
+				// and 2147488000 is stored by the cluster as 2147491840.
+				Config: organizationConfig(name, username, password, "ssd_quota = 1074790400\n  total_quota = 2147532800"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					accOrganizationMustBeOurs(name),
 					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "name", name),
 					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "username", username),
-					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "ssd_quota", "1024"),
-					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "total_quota", "2048"),
+					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "ssd_quota", "1074790400"),
+					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "total_quota", "2147532800"),
 					resource.TestCheckResourceAttrSet("weka_organization.tfacc-org", "id"),
 				),
 			},
 			{
-				Config: organizationConfig(renamed, username, password, "ssd_quota = 4096\n  total_quota = 8192"),
+				Config: organizationConfig(renamed, username, password, "ssd_quota = 2147532800\n  total_quota = 4295065600"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					accOrganizationMustBeOurs(renamed),
 					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "name", renamed),
-					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "ssd_quota", "4096"),
-					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "total_quota", "8192"),
+					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "ssd_quota", "2147532800"),
+					resource.TestCheckResourceAttr("weka_organization.tfacc-org", "total_quota", "4295065600"),
 				),
 			},
 			{

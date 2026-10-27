@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -68,10 +69,13 @@ func (r *fileSystemResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Required:    true,
 			},
 			"ssd_capacity": schema.Int64Attribute{
-				Description:   "SSD capacity in bytes. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.",
-				Optional:      true,
-				Computed:      true,
-				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+				Description: "SSD capacity in bytes. Omit it when the filesystem is not tiered; the cluster sets it equal to total_capacity. A different value requires an object store attached to the filesystem.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+					ssdFollowsTotal(),
+				},
 			},
 			"auth_required": schema.BoolAttribute{
 				Description:   "Require an authenticated user to mount this filesystem. Only takes effect in the root organization. Server default on create; removing this later keeps the current value rather than reverting, since the API has no way to ask for the default back.",
@@ -97,8 +101,9 @@ func (r *fileSystemResource) Configure(_ context.Context, req resource.Configure
 }
 
 func (r *fileSystemResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan fileSystemModel
+	var plan, cfg fileSystemModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -107,7 +112,7 @@ func (r *fileSystemResource) Create(ctx context.Context, req resource.CreateRequ
 		Name:          plan.Name.ValueString(),
 		GroupName:     plan.GroupName.ValueString(),
 		TotalCapacity: plan.TotalCapacity.ValueInt64(),
-		SsdCapacity:   int64Ptr(plan.SSDCapacity),
+		SsdCapacity:   ssdPtr(plan.TotalCapacity, cfg.SSDCapacity),
 		AuthRequired:  boolPtr(plan.AuthRequired),
 		Encrypted:     boolPtr(plan.Encrypted),
 	})
@@ -152,16 +157,20 @@ func (r *fileSystemResource) Read(ctx context.Context, req resource.ReadRequest,
 }
 
 func (r *fileSystemResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state fileSystemModel
+	var plan, state, cfg fileSystemModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	// Config, not plan. An omitted ssd_capacity is copied from state into the
+	// plan, and sending that old value with a new total is rejected on a
+	// filesystem that is not tiered.
 	body := wekaapi.UpdateFileSystemJSONRequestBody{
 		TotalCapacity: int64Ptr(plan.TotalCapacity),
-		SsdCapacity:   int64Ptr(plan.SSDCapacity),
+		SsdCapacity:   ssdPtr(plan.TotalCapacity, cfg.SSDCapacity),
 		AuthRequired:  boolPtr(plan.AuthRequired),
 	}
 	if !plan.Name.Equal(state.Name) {
@@ -194,6 +203,21 @@ func (r *fileSystemResource) Delete(ctx context.Context, req resource.DeleteRequ
 		err = wekaapi.Check(out.StatusCode(), out.Body)
 	}
 	if err != nil && !wekaapi.IsNotFound(err) {
+		resp.Diagnostics.AddError("Deleting filesystem", err.Error())
+		return
+	}
+	// Delete returns before the filesystem is gone. The group delete that
+	// follows fails while it is still removing.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	err = wekaapi.Poll(ctx, time.Second, func(ctx context.Context) (bool, error) {
+		_, err := r.getRaw(ctx, state.ID.ValueString())
+		if wekaapi.IsNotFound(err) {
+			return true, nil
+		}
+		return false, err
+	})
+	if err != nil {
 		resp.Diagnostics.AddError("Deleting filesystem", err.Error())
 	}
 }
@@ -310,6 +334,43 @@ func forceFreshOne() *wekaapi.GetFileSystemParams {
 func forceFreshList() *wekaapi.GetFileSystemsParams {
 	v := true
 	return &wekaapi.GetFileSystemsParams{ForceFresh: &v}
+}
+
+// ssdFollowsTotal plans an omitted ssd_capacity as total_capacity. The cluster
+// does that itself for a filesystem that is not tiered, and UseStateForUnknown
+// would otherwise keep the previous SSD in the plan.
+func ssdFollowsTotal() planmodifier.Int64 { return ssdFollowsTotalModifier{} }
+
+type ssdFollowsTotalModifier struct{}
+
+func (ssdFollowsTotalModifier) Description(context.Context) string {
+	return "When ssd_capacity is omitted, plan it equal to total_capacity."
+}
+
+func (m ssdFollowsTotalModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (ssdFollowsTotalModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
+	if !req.ConfigValue.IsNull() {
+		return
+	}
+	var total types.Int64
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("total_capacity"), &total)...)
+	if resp.Diagnostics.HasError() || total.IsNull() || total.IsUnknown() {
+		return
+	}
+	resp.PlanValue = total
+}
+
+// ssdPtr omits SSD capacity when it matches total or was left unset. A
+// filesystem that is not tiered rejects an explicit SSD capacity and sets it
+// equal to total itself.
+func ssdPtr(total, ssd types.Int64) *int64 {
+	if !total.IsNull() && !total.IsUnknown() && !ssd.IsNull() && !ssd.IsUnknown() && ssd.ValueInt64() == total.ValueInt64() {
+		return nil
+	}
+	return int64Ptr(ssd)
 }
 
 func int64Ptr(v types.Int64) *int64 {
