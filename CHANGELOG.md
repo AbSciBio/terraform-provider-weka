@@ -15,4 +15,5 @@ been tagged yet; entries move under a version heading at the first release.
 ### Changed
 
 - Provider address is `registry.terraform.io/abscibio/weka`.
+- README describes the resources that exist. Examples use `weka.example.com`.
 - Module path is `github.com/AbSciBio/terraform-provider-weka`.

@@ -2,7 +2,7 @@
 
 Terraform provider for configuration inside a running Weka cluster (filesystems, quotas, snapshot policies, S3, users). The Weka operator owns cluster layout; do not add resources for containers, drives, hosts, failure domains, KMS, or turning protocol services on.
 
-This repo will be published. No cluster names, endpoints, credentials, or internal hostnames in code, tests, examples, or docs.
+This repo is public. No cluster names, endpoints, credentials, or internal hostnames in code, tests, examples, or docs.
 
 ## Commands
 
