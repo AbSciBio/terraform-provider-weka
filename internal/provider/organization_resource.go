@@ -266,8 +266,7 @@ func replaceWhenKnown() planmodifier.String {
 	)
 }
 
-// quotaAlign is the step weka-test-ord used when it stored 2147488000 as
-// 2147491840. 2147491840 is the next multiple of 8192.
+// quotaAlign is the cluster's quota rounding step.
 const quotaAlign int64 = 8192
 
 func quotaSendable() validator.Int64 { return quotaSendableValidator{} }

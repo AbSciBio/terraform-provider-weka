@@ -1,0 +1,29 @@
+# Hits a real Weka cluster. Creates only tfacc- names. Run it by hand.
+# Repository secrets: WEKA_ENDPOINT, WEKA_USERNAME, WEKA_PASSWORD.
+# Optional: WEKA_ORG, WEKA_INSECURE.
+name: Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testacc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - env:
+          TF_ACC: "1"
+          WEKA_ENDPOINT: ${{ secrets.WEKA_ENDPOINT }}
+          WEKA_USERNAME: ${{ secrets.WEKA_USERNAME }}
+          WEKA_PASSWORD: ${{ secrets.WEKA_PASSWORD }}
+          WEKA_ORG: ${{ secrets.WEKA_ORG }}
+          WEKA_INSECURE: ${{ secrets.WEKA_INSECURE }}
+        run: go test -timeout 15m -v ./internal/provider/
