@@ -46,12 +46,20 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           PASSPHRASE: ${{ secrets.PASSPHRASE }}
         run: |
-          if [ -n "$GPG_PRIVATE_KEY" ] && [ -n "$PASSPHRASE" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
+          if [ -z "$GPG_PRIVATE_KEY" ] || [ -z "$PASSPHRASE" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "GPG_PRIVATE_KEY or PASSPHRASE is unset. No tag is cut until both exist."
+            exit 0
           fi
+          # The first automatic version would be 1.0.0. Stay on 0.x until v0.1.0 exists.
+          tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          case "$tag" in
+            v0.*) echo "ready=true" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "ready=false" >> "$GITHUB_OUTPUT"
+              echo "No 0.x tag yet (${tag:-none}). Not cutting a release."
+              ;;
+          esac
       - name: Cut the tag
         id: semantic
         if: steps.key.outputs.ready == 'true'
