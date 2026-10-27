@@ -11,7 +11,7 @@ terraform {
   required_providers {
     weka = {
       source  = "abscibio/weka"
-      version = "~> 0.1"
+      version = "0.1.0"
     }
   }
 }
