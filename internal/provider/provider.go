@@ -126,5 +126,13 @@ func (p *wekaProvider) Resources(_ context.Context) []func() resource.Resource {
 }
 
 func (p *wekaProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		NewFileSystemDataSource,
+		NewFileSystemGroupDataSource,
+		NewLdapDataSource,
+		NewLockoutPolicyDataSource,
+		NewObjectStoreBucketDataSource,
+		NewOrganizationDataSource,
+		NewUserDataSource,
+	}
 }
