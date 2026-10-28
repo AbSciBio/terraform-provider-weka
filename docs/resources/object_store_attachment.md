@@ -3,12 +3,12 @@
 page_title: "weka_object_store_attachment Resource - weka"
 subcategory: ""
 description: |-
-  Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter.
+  Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.
 ---
 
 # weka_object_store_attachment (Resource)
 
-Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter.
+Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.
 
 ## Example Usage
 

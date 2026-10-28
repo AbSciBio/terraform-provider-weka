@@ -29,7 +29,7 @@ Each resource has a matching data source.
 
 - `weka_filesystem_group` and `weka_filesystem`
 - `weka_organization` and `weka_user`
-- `weka_object_store_bucket`
+- `weka_object_store_bucket` and `weka_object_store_attachment`
 - `weka_ldap` and `weka_lockout_policy`
 
 ## Development

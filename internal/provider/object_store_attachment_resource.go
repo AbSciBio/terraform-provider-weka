@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -41,7 +42,7 @@ func (r *objectStoreAttachmentResource) Metadata(_ context.Context, req resource
 
 func (r *objectStoreAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter.",
+		Description: "Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:   "<filesystem_id>/<object_store_bucket_id>.",
@@ -151,11 +152,28 @@ func (r *objectStoreAttachmentResource) Delete(ctx context.Context, req resource
 		return
 	}
 
-	out, err := r.api.DetachObsBucketFromFSWithResponse(ctx, state.FilesystemID.ValueString(), state.ObjectStoreBucketID.ValueString())
+	fsID, bucketID := state.FilesystemID.ValueString(), state.ObjectStoreBucketID.ValueString()
+	out, err := r.api.DetachObsBucketFromFSWithResponse(ctx, fsID, bucketID)
 	if err == nil {
 		err = wekaapi.Check(out.StatusCode(), out.Body)
 	}
 	if err != nil && !wekaapi.IsNotFound(err) {
+		resp.Diagnostics.AddError("Detaching object store bucket from filesystem", err.Error())
+		return
+	}
+	// Detach returns a task id. Wait until the bucket is gone from the
+	// filesystem, same as filesystem delete. Two minutes matches that wait;
+	// a detach that copies data back to SSD can outlive it.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	err = wekaapi.Poll(ctx, time.Second, func(ctx context.Context) (bool, error) {
+		_, err := r.get(ctx, fsID, bucketID)
+		if wekaapi.IsNotFound(err) {
+			return true, nil
+		}
+		return false, err
+	})
+	if err != nil {
 		resp.Diagnostics.AddError("Detaching object store bucket from filesystem", err.Error())
 	}
 }

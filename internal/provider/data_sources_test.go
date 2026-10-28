@@ -146,6 +146,33 @@ data "weka_object_store_bucket" "found" {
 	})
 }
 
+func TestObjectStoreAttachmentDataSource(t *testing.T) {
+	f := newFakeWeka(t)
+	fakeObjectStoreAttachments(t, f)
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: f.config(`
+resource "weka_object_store_attachment" "test" {
+  filesystem_id          = "fs-1"
+  object_store_bucket_id = "bucket-local"
+}
+
+data "weka_object_store_attachment" "found" {
+  id = weka_object_store_attachment.test.id
+}`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.weka_object_store_attachment.found", "filesystem_id", "fs-1"),
+					resource.TestCheckResourceAttr("data.weka_object_store_attachment.found", "object_store_bucket_id", "bucket-local"),
+					resource.TestCheckResourceAttr("data.weka_object_store_attachment.found", "mode", "WRITABLE"),
+				),
+			},
+		},
+	})
+}
+
 func TestLdapDataSource(t *testing.T) {
 	f := newFakeWeka(t)
 	s := fakeLdap(t, f)

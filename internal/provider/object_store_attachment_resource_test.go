@@ -21,7 +21,7 @@ type fakeAttachedBucket struct {
 // obs_buckets list. It does not implement the rest of /fileSystems or
 // /objectStoreBuckets; register fakeFileSystems/fakeObjectStoreBuckets
 // alongside it for a test that also needs those resources.
-func fakeObjectStoreAttachments(t *testing.T, f *fakeWeka) {
+func fakeObjectStoreAttachments(t *testing.T, f *fakeWeka) func(fsUid, bucketUid string) {
 	var bucketStore sync.Map // bucket uid -> struct{ Name, Mode string }
 	var fsStore sync.Map     // fs uid -> *sync.Map of bucket uid -> fakeAttachedBucket
 
@@ -82,11 +82,14 @@ func fakeObjectStoreAttachments(t *testing.T, f *fakeWeka) {
 	}
 	registerBucket("bucket-local", "tiering", "WRITABLE")
 	registerBucket("bucket-remote", "snapshots", "REMOTE")
+	return func(fsUid, bucketUid string) {
+		fsAttachments(fsUid).Delete(bucketUid)
+	}
 }
 
 func TestObjectStoreAttachmentResource(t *testing.T) {
 	f := newFakeWeka(t)
-	fakeObjectStoreAttachments(t, f)
+	drop := fakeObjectStoreAttachments(t, f)
 
 	const fsUid = "fs-1"
 
@@ -123,6 +126,20 @@ resource "weka_object_store_attachment" "snapshots" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("weka_object_store_attachment.snapshots", "mode", "REMOTE"),
 				),
+			},
+			{
+				// Deleted outside Terraform: Read drops it and the plan recreates it.
+				PreConfig: func() { drop(fsUid, "bucket-local") },
+				Config: f.config(fmt.Sprintf(`
+resource "weka_object_store_attachment" "tiering" {
+  filesystem_id           = %q
+  object_store_bucket_id  = "bucket-local"
+}
+resource "weka_object_store_attachment" "snapshots" {
+  filesystem_id           = %q
+  object_store_bucket_id  = "bucket-remote"
+}`, fsUid, fsUid)),
+				Check: resource.TestCheckResourceAttr("weka_object_store_attachment.tiering", "mode", "WRITABLE"),
 			},
 		},
 	})
