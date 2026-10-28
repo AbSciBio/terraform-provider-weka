@@ -41,7 +41,7 @@ func (p *wekaProvider) Metadata(_ context.Context, _ provider.MetadataRequest, r
 
 func (p *wekaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Configures a running Weka cluster through its REST API: filesystems, filesystem groups, organizations, users, object-store buckets and their filesystem attachments, LDAP, and the account lockout policy. Cluster layout belongs to the Weka operator, not this provider.",
+		Description: "Configures a running Weka cluster through its REST API: filesystems, filesystem groups, organizations, users, object-store buckets and their filesystem attachments, snapshot policies, LDAP, and the account lockout policy. Cluster layout belongs to the Weka operator, not this provider.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				Description: "Cluster URL, e.g. `https://weka.example.com:14000`. `/api/v2` is appended if missing. Env: `WEKA_ENDPOINT`.",
@@ -122,6 +122,7 @@ func (p *wekaProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewObjectStoreAttachmentResource,
 		NewObjectStoreBucketResource,
 		NewOrganizationResource,
+		NewSnapshotPolicyResource,
 		NewUserResource,
 	}
 }
