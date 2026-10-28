@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/AbSciBio/terraform-provider-weka/internal/wekaapi"
@@ -42,7 +44,7 @@ func (r *objectStoreAttachmentResource) Metadata(_ context.Context, req resource
 
 func (r *objectStoreAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.",
+		Description: "Attaches an object store bucket to a filesystem. Omit mode for a local (tiering) bucket. A remote (snapshot) bucket must set mode to REMOTE once the filesystem already has a tiering bucket. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:   "<filesystem_id>/<object_store_bucket_id>.",
@@ -60,8 +62,11 @@ func (r *objectStoreAttachmentResource) Schema(_ context.Context, _ resource.Sch
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"mode": schema.StringAttribute{
-				Description: "Resulting attachment mode reported by the cluster: WRITABLE for a local (tiering) bucket, REMOTE for a remote (snapshot) bucket.",
-				Computed:    true,
+				Description:   "Mode to attach with. Omit it for the first local (tiering) bucket; the cluster reports WRITABLE. A remote (snapshot) bucket has to be REMOTE, which the published OpenAPI enum does not list. Changing it replaces the attachment.",
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace(), stringplanmodifier.UseStateForUnknown()},
+				Validators:    []validator.String{stringvalidator.OneOf("WRITABLE", "READ_ONLY", "REMOTE")},
 			},
 		},
 	}
@@ -92,9 +97,14 @@ func (r *objectStoreAttachmentResource) Create(ctx context.Context, req resource
 		return
 	}
 
-	out, err := r.api.AttachObsBucketToFsWithResponse(ctx, fsID, wekaapi.AttachObsBucketToFsJSONRequestBody{
-		ObsName: *bucket.JSON200.Data.Name,
-	})
+	body := wekaapi.AttachObsBucketToFsJSONRequestBody{ObsName: *bucket.JSON200.Data.Name}
+	if mode := optString(plan.Mode); mode != nil {
+		// REMOTE is not in the generated enum. The cluster rejects a remote-site
+		// bucket unless this is sent explicitly.
+		m := wekaapi.AttachObsBucketToFsJSONBodyObsMode(*mode)
+		body.ObsMode = &m
+	}
+	out, err := r.api.AttachObsBucketToFsWithResponse(ctx, fsID, body)
 	if err == nil {
 		err = wekaapi.Check(out.StatusCode(), out.Body)
 	}

@@ -42,6 +42,7 @@ func fakeObjectStoreAttachments(t *testing.T, f *fakeWeka) func(fsUid, bucketUid
 	f.Handle("POST /fileSystems/{uid}/objectStoreBuckets", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			ObsName string `json:"obs_name"`
+			ObsMode string `json:"obs_mode"`
 		}
 		decodeBody(t, r, &body)
 		var found string
@@ -57,6 +58,13 @@ func fakeObjectStoreAttachments(t *testing.T, f *fakeWeka) func(fsUid, bucketUid
 		if found == "" {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("no object store bucket named %q", body.ObsName))
 			return
+		}
+		if mode == "REMOTE" && body.ObsMode == "" {
+			writeError(w, http.StatusBadRequest, "remote bucket requires obs_mode")
+			return
+		}
+		if body.ObsMode != "" {
+			mode = body.ObsMode
 		}
 		fsAttachments(r.PathValue("uid")).Store(found, fakeAttachedBucket{Name: body.ObsName, Uid: found, Mode: mode})
 		writeData(w, nil)
@@ -122,6 +130,7 @@ resource "weka_object_store_attachment" "tiering" {
 resource "weka_object_store_attachment" "snapshots" {
   filesystem_id           = %q
   object_store_bucket_id  = "bucket-remote"
+  mode                    = "REMOTE"
 }`, fsUid, fsUid)),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("weka_object_store_attachment.snapshots", "mode", "REMOTE"),
@@ -138,6 +147,7 @@ resource "weka_object_store_attachment" "tiering" {
 resource "weka_object_store_attachment" "snapshots" {
   filesystem_id           = %q
   object_store_bucket_id  = "bucket-remote"
+  mode                    = "REMOTE"
 }`, fsUid, fsUid)),
 				Check: resource.TestCheckResourceAttr("weka_object_store_attachment.tiering", "mode", "WRITABLE"),
 			},

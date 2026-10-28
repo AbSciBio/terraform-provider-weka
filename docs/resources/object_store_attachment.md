@@ -3,12 +3,12 @@
 page_title: "weka_object_store_attachment Resource - weka"
 subcategory: ""
 description: |-
-  Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.
+  Attaches an object store bucket to a filesystem. Omit mode for a local (tiering) bucket. A remote (snapshot) bucket must set mode to REMOTE once the filesystem already has a tiering bucket. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.
 ---
 
 # weka_object_store_attachment (Resource)
 
-Attaches an object store bucket to a filesystem for tiering (bucket's obs_site = local) or snapshots (obs_site = remote). The server decides the resulting mode from the bucket's own site; it is not a request parameter. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.
+Attaches an object store bucket to a filesystem. Omit mode for a local (tiering) bucket. A remote (snapshot) bucket must set mode to REMOTE once the filesystem already has a tiering bucket. Destroy detaches the bucket and waits until the cluster reports it gone. Detaching the only local bucket copies that filesystem's data back onto SSD.
 
 ## Example Usage
 
@@ -38,10 +38,13 @@ resource "weka_object_store_attachment" "tiering" {
 - `filesystem_id` (String) UID of the filesystem to attach the bucket to.
 - `object_store_bucket_id` (String) UID of the weka_object_store_bucket to attach.
 
+### Optional
+
+- `mode` (String) Mode to attach with. Omit it for the first local (tiering) bucket; the cluster reports WRITABLE. A remote (snapshot) bucket has to be REMOTE, which the published OpenAPI enum does not list. Changing it replaces the attachment.
+
 ### Read-Only
 
 - `id` (String) <filesystem_id>/<object_store_bucket_id>.
-- `mode` (String) Resulting attachment mode reported by the cluster: WRITABLE for a local (tiering) bucket, REMOTE for a remote (snapshot) bucket.
 
 ## Import
 
