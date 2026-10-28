@@ -139,6 +139,9 @@ const (
 	disabledTime   = "00:00"
 	disabledHours  = "00"
 	disabledUpload = "none"
+	// disabledRetentionValue is 1, not 0: the API validates retention >= 1
+	// even on a disabled schedule.
+	disabledRetentionValue = 1
 )
 
 // policyParams builds the full five-kind template the API requires on every
@@ -147,13 +150,26 @@ const (
 func policyParams(daily *scheduleModel, hourly *hourlyModel) wekaapi.SnapshotPolicyTemplate {
 	t := wekaapi.SnapshotPolicyTemplate{}
 	f := false
+	// Every field is validated even when enable=false (confirmed live: a
+	// missing days/time/months/start_time/end_time on a disabled schedule
+	// 400s), so each disabled kind gets the same sentinels daily/hourly use.
+	disabledDaysVal, disabledTimeVal, disabledUploadVal := disabledDays, disabledTime, disabledUpload
+	disabledRetention := float32(disabledRetentionValue)
+	// periodic's interval is validated 1-1440 even when disabled, and its
+	// start/end time must form a non-empty range (00:00-00:00 is rejected).
+	minInterval := float32(1)
+	periodicEndTime := "23:59"
+	// weekly rejects "all" and requires exactly one day name; monthly's
+	// "days" is day-of-month (max 4 values, also rejects "all").
+	weeklyDay := "monday"
+	monthlyDay := "01"
 	t.Weekly = &struct {
 		Days      *string  `json:"days,omitempty"`
 		Enable    *bool    `json:"enable,omitempty"`
 		Retention *float32 `json:"retention,omitempty"`
 		Time      *string  `json:"time,omitempty"`
 		Upload    *string  `json:"upload,omitempty"`
-	}{Enable: &f}
+	}{Enable: &f, Days: &weeklyDay, Time: &disabledTimeVal, Retention: &disabledRetention, Upload: &disabledUploadVal}
 	t.Monthly = &struct {
 		Days      *string  `json:"days,omitempty"`
 		Enable    *bool    `json:"enable,omitempty"`
@@ -161,7 +177,7 @@ func policyParams(daily *scheduleModel, hourly *hourlyModel) wekaapi.SnapshotPol
 		Retention *float32 `json:"retention,omitempty"`
 		Time      *string  `json:"time,omitempty"`
 		Upload    *string  `json:"upload,omitempty"`
-	}{Enable: &f}
+	}{Enable: &f, Days: &monthlyDay, Months: &disabledDaysVal, Time: &disabledTimeVal, Retention: &disabledRetention, Upload: &disabledUploadVal}
 	t.Periodic = &struct {
 		Days      *string  `json:"days,omitempty"`
 		Enable    *bool    `json:"enable,omitempty"`
@@ -170,7 +186,7 @@ func policyParams(daily *scheduleModel, hourly *hourlyModel) wekaapi.SnapshotPol
 		Retention *float32 `json:"retention,omitempty"`
 		StartTime *string  `json:"start_time,omitempty"`
 		Upload    *string  `json:"upload,omitempty"`
-	}{Enable: &f}
+	}{Enable: &f, Days: &disabledDaysVal, EndTime: &periodicEndTime, Interval: &minInterval, Retention: &disabledRetention, StartTime: &disabledTimeVal, Upload: &disabledUploadVal}
 
 	if daily != nil {
 		retention := float32(daily.Retention.ValueInt64())
@@ -189,14 +205,13 @@ func policyParams(daily *scheduleModel, hourly *hourlyModel) wekaapi.SnapshotPol
 		}
 	} else {
 		days, tm, upload := disabledDays, disabledTime, disabledUpload
-		zero := float32(0)
 		t.Daily = &struct {
 			Days      *string  `json:"days,omitempty"`
 			Enable    *bool    `json:"enable,omitempty"`
 			Retention *float32 `json:"retention,omitempty"`
 			Time      *string  `json:"time,omitempty"`
 			Upload    *string  `json:"upload,omitempty"`
-		}{Enable: &f, Days: &days, Time: &tm, Retention: &zero, Upload: &upload}
+		}{Enable: &f, Days: &days, Time: &tm, Retention: &disabledRetention, Upload: &upload}
 	}
 
 	if hourly != nil {
@@ -219,6 +234,8 @@ func policyParams(daily *scheduleModel, hourly *hourlyModel) wekaapi.SnapshotPol
 		}
 	} else {
 		days, hours, upload := disabledDays, disabledHours, disabledUpload
+		// minute_offset stays 0 (valid: 0-59); retention needs the
+		// disabled-schedule minimum of 1.
 		zero := float32(0)
 		t.Hourly = &struct {
 			Days         *string  `json:"days,omitempty"`
@@ -227,7 +244,7 @@ func policyParams(daily *scheduleModel, hourly *hourlyModel) wekaapi.SnapshotPol
 			MinuteOffset *float32 `json:"minuteOffset,omitempty"`
 			Retention    *float32 `json:"retention,omitempty"`
 			Upload       *string  `json:"upload,omitempty"`
-		}{Enable: &f, Days: &days, Hours: &hours, MinuteOffset: &zero, Retention: &zero, Upload: &upload}
+		}{Enable: &f, Days: &days, Hours: &hours, MinuteOffset: &zero, Retention: &disabledRetention, Upload: &upload}
 	}
 	return t
 }
@@ -538,7 +555,7 @@ func isDisabledDaily(d *struct {
 	Upload    *string  `json:"upload,omitempty"`
 }) bool {
 	return !deref(d.Enable) && deref(d.Days) == disabledDays && deref(d.Time) == disabledTime &&
-		deref(d.Retention) == 0 && deref(d.Upload) == disabledUpload
+		deref(d.Retention) == disabledRetentionValue && deref(d.Upload) == disabledUpload
 }
 
 func isDisabledHourly(h *struct {
@@ -550,7 +567,7 @@ func isDisabledHourly(h *struct {
 	Upload       *string  `json:"upload,omitempty"`
 }) bool {
 	return !deref(h.Enable) && deref(h.Days) == disabledDays && deref(h.Hours) == disabledHours &&
-		deref(h.MinuteOffset) == 0 && deref(h.Retention) == 0 && deref(h.Upload) == disabledUpload
+		deref(h.MinuteOffset) == 0 && deref(h.Retention) == disabledRetentionValue && deref(h.Upload) == disabledUpload
 }
 
 func stringValues(vs []types.String) []string {
